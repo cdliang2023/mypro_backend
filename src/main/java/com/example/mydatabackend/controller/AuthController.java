@@ -6,6 +6,7 @@ import com.example.mydatabackend.mapper.UserMapper;
 import com.example.mydatabackend.result.ApiResult;
 import com.example.mydatabackend.vo.UserLoginVO;
 import com.example.mydatabackend.vo.UserVO;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,11 +16,14 @@ public class AuthController {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final StringRedisTemplate stringRedisTemplate;
 
     public AuthController(UserMapper userMapper,
-                          PasswordEncoder passwordEncoder) {
+                          PasswordEncoder passwordEncoder,
+                          StringRedisTemplate stringRedisTemplate) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     @PostMapping("/login")
@@ -32,16 +36,31 @@ public class AuthController {
             return ApiResult.fail("密码不能为空");
         }
 
+        if (request.getCaptchaId() == null || request.getCaptchaId().trim().isEmpty()) {
+            return ApiResult.fail("验证码编号不能为空，请刷新验证码");
+        }
+
+        if (request.getCaptchaCode() == null || request.getCaptchaCode().trim().isEmpty()) {
+            return ApiResult.fail("验证码不能为空");
+        }
+
+        String redisKey = "captcha:" + request.getCaptchaId().trim();
+        String redisCode = stringRedisTemplate.opsForValue().get(redisKey);
+
+        if (redisCode == null) {
+            return ApiResult.fail("验证码已过期，请刷新验证码");
+        }
+
+        if (!redisCode.equalsIgnoreCase(request.getCaptchaCode().trim())) {
+            return ApiResult.fail("验证码错误");
+        }
+
+        // 验证码校验成功后立即删除，防止重复使用
+        stringRedisTemplate.delete(redisKey);
+
         String usrName = request.getUsrName().trim();
         String password = request.getPassword().trim();
 
-        /*
-         * BCrypt 加密后，不能再用：
-         * WHERE usr_name = ? AND password = ?
-         *
-         * 应该先根据用户名查出数据库中的加密密码，
-         * 然后用 passwordEncoder.matches() 判断。
-         */
         UserLoginVO loginUser = userMapper.findLoginUserByUsrName(usrName);
 
         if (loginUser == null) {
@@ -60,10 +79,6 @@ public class AuthController {
             return ApiResult.fail("用户名或密码错误");
         }
 
-        /*
-         * 登录成功后，不要把数据库中的 password 返回给前端。
-         * 只返回前端需要显示和判断权限的信息。
-         */
         UserVO userVO = new UserVO();
         userVO.setUsrName(loginUser.getUsrName());
         userVO.setQqnum(loginUser.getQqnum());
@@ -99,11 +114,6 @@ public class AuthController {
             avatar = "default.jpg";
         }
 
-        /*
-         * 注册时把明文密码加密后再保存到数据库。
-         * 用户前端仍然输入原始密码，例如 123456。
-         * 数据库存储的是 BCrypt 密文。
-         */
         String encodedPassword = passwordEncoder.encode(password);
 
         userMapper.register(

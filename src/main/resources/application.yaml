@@ -6,11 +6,25 @@ spring:
     url: jdbc:mysql://192.168.2.19:3306/mydata?useUnicode=true&characterEncoding=utf8&useSSL=false
     username: tliangty
     password: 111111
-    driver-class-name: com.mysql.jdbc.Driver   # 注意类名变化
+    driver-class-name: com.mysql.jdbc.Driver
   servlet:
     multipart:
       max-file-size: 20MB
       max-request-size: 30MB
+  # 新增 Redis 配置
+  redis:
+    host: localhost          # Redis 服务器地址（本地）
+    port: 6379               # Redis 默认端口
+    # password:              # 如果设置了密码，请在此填写
+    database: 0              # 使用的数据库索引
+    connect-timeout: 2000    # 连接超时（毫秒）
+    timeout: 5000            # 读取超时（毫秒）
+    lettuce:
+      pool:
+        max-active: 8        # 连接池最大连接数
+        max-idle: 8          # 连接池最大空闲连接数
+        min-idle: 0          # 连接池最小空闲连接数
+      shutdown-timeout: 100  # 关闭超时
 
 mybatis:
   configuration:
@@ -21,5 +35,5 @@ paper:
 
 admin:
   manage:
-      name: admin
-      phone: '15961253171'
+    name: admin
+    phone: '15961253171'
